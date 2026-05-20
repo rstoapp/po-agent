@@ -6,15 +6,15 @@ A browser-based AI-powered product owner assistant for the RSTO delivery pipelin
 
 ## What it does
 
-The PO Agent runs a multi-stage pipeline for every incoming request:
+The PO Agent runs a multi-stage pipeline for every incoming request: fghfgh
 
-| Stage | Agent | What it produces |
-|---|---|---|
-| **1. Intake** | Intake Agent | Classifies the request, asks clarifying questions, produces a Gate 1 plain-language summary |
-| **2. Classification** | Classification Agent | Audits which required fields are confirmed, partial, or missing — displayed as a checklist |
-| **3. Context** | Context Agent | Cross-references the request against the `rsto-context` repository to surface prior work, data gaps, and risks |
-| **4. Requirements** | Requirements Agent | Generates a structured requirement document with acceptance criteria, data specification, subtasks, and open decisions |
-| **5. Delivery** | Delivery Agent | Outputs a Notion ticket draft and 30-minute meeting prep brief |
+| Stage                       | Agent                | What it produces                                                                                                       |
+| --------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **1. Intake**         | Intake Agent         | Classifies the request, asks clarifying questions, produces a Gate 1 plain-language summary                            |
+| **2. Classification** | Classification Agent | Audits which required fields are confirmed, partial, or missing — displayed as a checklist                            |
+| **3. Context**        | Context Agent        | Cross-references the request against the `rsto-context` repository to surface prior work, data gaps, and risks       |
+| **4. Requirements**   | Requirements Agent   | Generates a structured requirement document with acceptance criteria, data specification, subtasks, and open decisions |
+| **5. Delivery**       | Delivery Agent       | Outputs a Notion ticket draft and 30-minute meeting prep brief                                                         |
 
 Each stage gates the next — the stakeholder reviews and approves before the pipeline advances.
 
@@ -22,15 +22,15 @@ Each stage gates the next — the stakeholder reviews and approves before the pi
 
 ## Request types
 
-| Type | Description |
-|---|---|
-| `sp-onboarding` | Adding a new service provider to the platform |
-| `community-onboarding` | Adding a new community-level dashboard |
-| `new-indicators` | New data indicators in an existing or new dashboard |
-| `data-bug` | Incorrect, missing, or miscalculated data |
-| `enhancement` | Improving an existing feature |
-| `design-task` | UX/visual design work (Figma, wireframes, mockups) |
-| `platform-admin` | User access, exports, configuration |
+| Type                     | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `sp-onboarding`        | Adding a new service provider to the platform       |
+| `community-onboarding` | Adding a new community-level dashboard              |
+| `new-indicators`       | New data indicators in an existing or new dashboard |
+| `data-bug`             | Incorrect, missing, or miscalculated data           |
+| `enhancement`          | Improving an existing feature                       |
+| `design-task`          | UX/visual design work (Figma, wireframes, mockups)  |
+| `platform-admin`       | User access, exports, configuration                 |
 
 ---
 
@@ -100,10 +100,10 @@ The dev server proxies all `/api/notion` requests to `https://api.notion.com/v1`
 
 Two databases are supported:
 
-| Variable | Database |
-|---|---|
+| Variable                        | Database                           |
+| ------------------------------- | ---------------------------------- |
 | `VITE_NOTION_DATABASE_ID_STO` | STO — backlog and feature tickets |
-| `VITE_NOTION_DATABASE_ID_SUP` | SUP — support and bug tickets |
+| `VITE_NOTION_DATABASE_ID_SUP` | SUP — support and bug tickets     |
 
 If your Notion database property names differ from the defaults, update the `FIELDS` mapping in `src/notionService.js`. To inspect the raw property names for your database, run this in the browser console while the dev server is running:
 
