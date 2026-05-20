@@ -6,7 +6,7 @@ A browser-based AI-powered product owner assistant for the RSTO delivery pipelin
 
 ## What it does
 
-The PO Agent runs a multi-stage pipeline for every incoming request: fghfgh
+The PO Agent runs a multi-stage pipeline for every incoming request: 
 
 | Stage                       | Agent                | What it produces                                                                                                       |
 | --------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
