@@ -721,6 +721,111 @@ function Gate1Panel({ content, onApprove, onRevise, revisionInput, setRevisionIn
   );
 }
 
+// ─── Workstreams panel ────────────────────────────────────────────────────────
+function WorkstreamsPanel({ checklistStatus, classifying, onConfirm, onSplitOut }) {
+  const epicTypes = ["sp-onboarding", "community-onboarding", "new-indicators"];
+  const isEpicScope = checklistStatus
+    ? (checklistStatus.splitRequired || epicTypes.includes(checklistStatus.type))
+    : false;
+  const missingCount = (checklistStatus?.items || []).filter(i => i.status === "missing").length;
+
+  return (
+    <div style={{
+      background: C.bgCard, border: `1px solid ${C.tealBorder}`,
+      borderRadius: 10, padding: 18, margin: "8px 0",
+      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.teal }} />
+        <span style={{ color: C.teal, fontWeight: 600, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Work streams detected
+        </span>
+        {classifying && (
+          <div style={{ display: "flex", gap: 3, marginLeft: 6 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: C.teal, animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {classifying && !checklistStatus ? (
+        <div style={{ color: C.textMuted, fontSize: 13 }}>Identifying work streams…</div>
+      ) : checklistStatus ? (
+        <>
+          {/* Primary work stream card */}
+          <div style={{
+            background: C.brandDim, border: `1px solid ${C.brandBorder}`,
+            borderRadius: 8, padding: "12px 14px", marginBottom: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em",
+                padding: "2px 7px", borderRadius: 4,
+                background: C.brand + "22", color: C.brand, border: `1px solid ${C.brand}44`,
+              }}>1</span>
+              <span style={{ color: C.navy, fontWeight: 600, fontSize: 13 }}>{checklistStatus.typeLabel}</span>
+              {isEpicScope && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em",
+                  padding: "2px 7px", borderRadius: 4,
+                  background: C.amberDim, color: C.amber, border: `1px solid ${C.amberBorder}`,
+                  marginLeft: "auto",
+                }}>Epic scope</span>
+              )}
+            </div>
+            <div style={{ color: C.textMuted, fontSize: 12 }}>
+              {missingCount > 0
+                ? `${missingCount} field${missingCount !== 1 ? "s" : ""} still to confirm — the agent will ask about the most critical ones first.`
+                : "The request looks well-specified. The agent will verify a few things before producing the summary."}
+            </div>
+          </div>
+
+          {/* Split recommendation */}
+          {checklistStatus.splitRequired && (
+            <div style={{
+              background: C.amberDim, border: `1px solid ${C.amberBorder}`,
+              borderRadius: 8, padding: "12px 14px", marginBottom: 10,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em",
+                  padding: "2px 7px", borderRadius: 4,
+                  background: C.amber + "22", color: C.amber, border: `1px solid ${C.amberBorder}`,
+                }}>2</span>
+                <span style={{ color: C.amber, fontWeight: 600, fontSize: 13 }}>Split recommended</span>
+              </div>
+              <div style={{ color: C.text, fontSize: 12, lineHeight: 1.55, marginBottom: 10 }}>
+                {checklistStatus.splitReason}
+              </div>
+              <button onClick={onSplitOut} style={{
+                background: "transparent", color: C.amber, border: `1px solid ${C.amberBorder}`,
+                borderRadius: 6, padding: "6px 14px", fontWeight: 600, fontSize: 12, cursor: "pointer",
+              }}>
+                Create as separate request and continue here
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+            <button onClick={onConfirm} style={{
+              background: C.brand, color: "#fff", border: "none",
+              borderRadius: 7, padding: "9px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+            }}>
+              Looks right — start intake
+            </button>
+            {isEpicScope && !checklistStatus.splitRequired && (
+              <span style={{ color: C.textDim, fontSize: 12 }}>
+                The agent will help identify if this needs breaking into smaller tickets.
+              </span>
+            )}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Node graph ───────────────────────────────────────────────────────────────
 const STATUS_NODE = {
   "done":        { bg:"#EDF0E5", border:"#5D7A45", text:"#2D3D20", dot:"#5D7A45",  label:"Done" },
@@ -1631,7 +1736,7 @@ function Message({ role, content, gate1Content, gate1Ready, onProceed, onApprove
 }
 
 // ─── Intake view ──────────────────────────────────────────────────────────────
-function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
+function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, onSplitOut, readOnly }) {
   const snap = initialSnapshot || {};
   const [messages, setMessages] = useState(snap.messages || []);
   const [input, setInput] = useState("");
@@ -1645,6 +1750,12 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
   const [parsingDoc, setParsingDoc] = useState(false);
   const [checklistStatus, setChecklistStatus] = useState(snap.checklistStatus || null);
   const [checklistLoading, setChecklistLoading] = useState(false);
+  // workstreamsPhase: 'idle' | 'classifying' | 'confirming' | 'done'
+  // Skip the workstreams gate when resuming a request that already has conversation history.
+  const [workstreamsPhase, setWorkstreamsPhase] = useState(
+    snap.conversationHistory?.length > 0 ? "done" : "idle"
+  );
+  const [pendingPayload, setPendingPayload] = useState(null);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -1673,6 +1784,7 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
 
   async function runClassification(requestText) {
     setChecklistLoading(true);
+    let result = null;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -1696,10 +1808,12 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
       try { parsed = JSON.parse(clean); }
       catch { const m = clean.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); else throw new Error("parse"); }
       setChecklistStatus(parsed);
+      result = parsed;
     } catch {
       // fail silently — classification is a bonus, not blocking
     }
     setChecklistLoading(false);
+    return result;
   }
 
   async function handleFileUpload(e) {
@@ -1743,24 +1857,11 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
       isDoc: true,
       docName: fileName,
     }]);
-    setLoading(true);
-    // Run classification in parallel (fire and forget)
-    runClassification(`Document: ${fileName}\n\n${docText}`);
-    const prompt = `The user has uploaded a Feature Request Form document called "${fileName}". Here is the full text:\n\n---\n${docText}\n---\n\nPlease read this document carefully, extract everything that is present, identify what critical information is still missing or ambiguous, and ask clarifying questions about the gaps. Do NOT produce the Gate 1 summary yet — always ask at least one round of clarifying questions first, even if the document appears complete. There is always something to verify or confirm. Do not ask for information already present in the document.`;
-    try {
-      const reply = await callAgent(prompt);
-      const gate1 = parseGate1(reply);
-      if (gate1) {
-        setGate1Content(gate1);
-        setGate1Ready(true);
-        setMessages(m => [...m, { role: "agent", content: reply, gate1Ready: true }]);
-      } else {
-        setMessages(m => [...m, { role: "agent", content: reply }]);
-      }
-    } catch {
-      setMessages(m => [...m, { role: "agent", content: "I had trouble reading the document. Please try again." }]);
-    }
-    setLoading(false);
+    // Gate on workstreams before calling the agent — run classification then wait for user to confirm.
+    setPendingPayload({ type: "doc", fileName, docText });
+    setWorkstreamsPhase("classifying");
+    await runClassification(`Document: ${fileName}\n\n${docText}`);
+    setWorkstreamsPhase("confirming");
   }
 
   async function callAgent(userMessage, systemOverride = null) {
@@ -1796,9 +1897,17 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
     setInput("");
     setStarted(true);
     setMessages(m => [...m, { role: "user", content: userText }]);
+
+    // First message — run classification and show workstreams panel before calling the agent.
+    if (workstreamsPhase === "idle") {
+      setPendingPayload({ type: "text", content: userText });
+      setWorkstreamsPhase("classifying");
+      await runClassification(userText);
+      setWorkstreamsPhase("confirming");
+      return;
+    }
+
     setLoading(true);
-    // On first typed message, classify the request in parallel
-    if (conversationHistory.length === 0) runClassification(userText);
     try {
       const reply = await callAgent(userText);
       const gate1 = parseGate1(reply);
@@ -1841,6 +1950,44 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
       setMessages(m => [...m, { role: "agent", content: "I had trouble processing the answers. Please try again." }]);
     }
     setLoading(false);
+  }
+
+  // Called when the user confirms the detected work streams and wants to proceed with intake.
+  async function handleConfirmWorkstreams() {
+    setWorkstreamsPhase("done");
+    if (!pendingPayload) return;
+    setLoading(true);
+    try {
+      let reply;
+      if (pendingPayload.type === "text") {
+        reply = await callAgent(pendingPayload.content);
+      } else {
+        const prompt = `The user has uploaded a Feature Request Form document called "${pendingPayload.fileName}". Here is the full text:\n\n---\n${pendingPayload.docText}\n---\n\nPlease read this document carefully, extract everything that is present, identify what critical information is still missing or ambiguous, and ask clarifying questions about the gaps. Do NOT produce the Gate 1 summary yet — always ask at least one round of clarifying questions first, even if the document appears complete. There is always something to verify or confirm. Do not ask for information already present in the document.`;
+        reply = await callAgent(prompt);
+      }
+      const gate1 = parseGate1(reply);
+      if (gate1) {
+        setGate1Content(gate1);
+        setGate1Ready(true);
+        setMessages(m => [...m, { role: "agent", content: reply, gate1Ready: true }]);
+      } else {
+        setMessages(m => [...m, { role: "agent", content: reply || "Here's my understanding:" }]);
+      }
+    } catch {
+      setMessages(m => [...m, { role: "agent", content: "I had trouble connecting. Please try again." }]);
+    }
+    setLoading(false);
+    setPendingPayload(null);
+  }
+
+  // Called when the user accepts the split recommendation — creates a sibling request and continues
+  // with the current one.
+  function handleSplitOut() {
+    onSplitOut?.({
+      title: checklistStatus?.splitReason?.slice(0, 80) || "Spin-off request",
+      type: checklistStatus?.type || "feature",
+    });
+    handleConfirmWorkstreams();
   }
 
   return (
@@ -1920,6 +2067,16 @@ function IntakeView({ initialSnapshot, onSnapshot, onGate1Ready, readOnly }) {
             />
           );
         })}
+
+        {/* Step 2 — workstreams gate: shown after classification, before agent starts */}
+        {(workstreamsPhase === "classifying" || workstreamsPhase === "confirming") && !readOnly && (
+          <WorkstreamsPanel
+            checklistStatus={checklistStatus}
+            classifying={workstreamsPhase === "classifying"}
+            onConfirm={handleConfirmWorkstreams}
+            onSplitOut={handleSplitOut}
+          />
+        )}
         {loading && (
           <div style={{ display: "flex", gap: 5, padding: "8px 2px" }}>
             {[0, 1, 2].map(i => (
@@ -2982,7 +3139,7 @@ function Gate1ReviewView({ gate1Content, onApproved, onRefine }) {
   );
 }
 
-function RequestFlow({ onComplete, initialRequest, onUpdate }) {
+function RequestFlow({ onComplete, initialRequest, onUpdate, onCreateChildRequest }) {
   const requestId = useRef(initialRequest?.id || `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
   const latestIntakeSnapshot = useRef(initialRequest?.intakeSnapshot || null);
   const [stage, setStage] = useState(initialRequest?.stage || "intake");
@@ -3104,6 +3261,18 @@ function RequestFlow({ onComplete, initialRequest, onUpdate }) {
     update({ stage: "delivery", deliveryOutput: null });
   }
 
+  // Called when IntakeView detects a split and the user accepts — creates a linked sibling request.
+  function handleSplitOut(splitInfo) {
+    if (!onCreateChildRequest) return;
+    onCreateChildRequest({
+      title: splitInfo.title || "Spin-off request",
+      type: splitInfo.type || "feature",
+      parentId: requestId.current,
+      isEpic: false,
+      stage: "intake",
+    });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Request-scoped pipeline stepper */}
@@ -3182,6 +3351,7 @@ function RequestFlow({ onComplete, initialRequest, onUpdate }) {
             initialSnapshot={initialRequest?.intakeSnapshot}
             onSnapshot={handleIntakeSnapshot}
             onGate1Ready={handleGate1Ready}
+            onSplitOut={handleSplitOut}
           />
         )}
         {!viewStage && stage === "gate1-pending" && (
@@ -4184,10 +4354,28 @@ function stageBadgeStyle(req) {
 function RequestsList({ onOpenRequest, onNewRequest }) {
   const [requests, setRequests] = useState(() => getRequests());
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [tab, setTab] = useState("all"); // all | docs
   const [saveStatus, setSaveStatus] = useState({}); // id → "saving" | "saved" | "error"
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   function refresh() { setRequests(getRequests()); }
+
+  function startEditing(e, req) {
+    e.stopPropagation();
+    setEditingId(req.id);
+    setEditValue(req.reqDoc?.title || req.title || "");
+  }
+
+  function commitEdit(req) {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== (req.reqDoc?.title || req.title)) {
+      const updated = { ...req, title: trimmed };
+      if (updated.reqDoc) updated.reqDoc = { ...updated.reqDoc, title: trimmed };
+      saveRequest(updated);
+      refresh();
+    }
+    setEditingId(null);
+  }
 
   function handleDelete(id) {
     deleteRequest(id);
@@ -4209,9 +4397,7 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
     downloadMarkdown(generateMarkdown(req), `${slug}.md`);
   }
 
-  const allRequests = requests;
-  const docRequests = requests.filter(r => r.reqDoc || r.deliveryOutput);
-  const displayed = tab === "docs" ? docRequests : allRequests;
+  const displayed = requests;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: C.bg, overflow: "hidden" }}>
@@ -4220,7 +4406,7 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <h1 style={{ color: C.navy, fontSize: 26, fontWeight: 700, margin: 0, fontFamily: "'Playfair Display', Georgia, serif" }}>Requests</h1>
-            <div style={{ color: C.textMuted, fontSize: 12, marginTop: 4 }}>{allRequests.length} total · {docRequests.length} with generated docs</div>
+            <div style={{ color: C.textMuted, fontSize: 12, marginTop: 4 }}>{requests.length} total</div>
           </div>
           <button onClick={onNewRequest} style={{
             background: C.brand, color: "#fff", border: "none", borderRadius: 8,
@@ -4231,23 +4417,12 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
             New request
           </button>
         </div>
-        <div style={{ display: "flex", gap: 2 }}>
-          {[["all", "All requests"], ["docs", "Generated docs"]].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              background: "transparent", border: "none",
-              borderBottom: tab === id ? `2px solid ${C.teal}` : "2px solid transparent",
-              color: tab === id ? C.teal : C.textMuted,
-              fontSize: 12, fontWeight: tab === id ? 600 : 400,
-              padding: "6px 14px 10px", cursor: "pointer",
-            }}>{label}</button>
-          ))}
-        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
         {displayed.length === 0 ? (
           <div style={{ color: C.textMuted, fontSize: 13, padding: "32px 0" }}>
-            {tab === "docs" ? "No generated documents yet. Complete a request to produce requirement docs and meeting prep." : "No requests yet. Use 'New request' to start one."}
+            {"No requests yet. Use 'New request' to start one."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -4259,12 +4434,22 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
               return (
                 <div key={req.id} style={{
                   background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10,
-                  padding: "14px 18px", cursor: "pointer",
+                  padding: "14px 18px", cursor: editingId === req.id ? "default" : "pointer",
                   transition: "box-shadow 0.15s, border-color 0.15s",
                 }}
-                  onClick={() => !isDeleting && onOpenRequest(req)}
-                  onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.07)"; e.currentTarget.style.borderColor = C.borderMed; }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = C.border; }}
+                  onClick={() => !isDeleting && editingId !== req.id && onOpenRequest(req)}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.07)";
+                    e.currentTarget.style.borderColor = C.borderMed;
+                    const btn = e.currentTarget.querySelector(".edit-name-btn");
+                    if (btn) btn.style.opacity = "1";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = C.border;
+                    const btn = e.currentTarget.querySelector(".edit-name-btn");
+                    if (btn) btn.style.opacity = "0";
+                  }}
                 >
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -4280,8 +4465,53 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
                           </span>
                         )}
                       </div>
-                      <div style={{ color: C.navy, fontSize: 13, fontWeight: 500, lineHeight: 1.4, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {req.reqDoc?.title || req.title || req.id}
+                      <div style={{ display: "flex", alignItems: "center", marginBottom: 4, minWidth: 0 }}>
+                        {editingId === req.id ? (
+                          <input
+                            autoFocus
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onBlur={() => commitEdit(req)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") { e.preventDefault(); commitEdit(req); }
+                              if (e.key === "Escape") { e.stopPropagation(); setEditingId(null); }
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              flex: 1, color: C.navy, fontSize: 13, fontWeight: 500,
+                              background: C.bgSubtle, border: `1px solid ${C.tealBorder}`,
+                              borderRadius: 5, padding: "2px 7px", fontFamily: "inherit",
+                              outline: "none", lineHeight: 1.5,
+                            }}
+                          />
+                        ) : (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0, maxWidth: "100%" }}>
+                            <span style={{ color: C.navy, fontSize: 13, fontWeight: 500, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {req.reqDoc?.title || req.title || req.id}
+                            </span>
+                            {req.isEpic && (
+                              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", padding: "1px 6px", borderRadius: 4, background: C.amberDim, color: C.amber, border: `1px solid ${C.amberBorder}`, flexShrink: 0 }}>Epic</span>
+                            )}
+                            {req.parentId && (
+                              <span style={{ fontSize: 11, color: C.textDim, flexShrink: 0 }}>↳ spin-off</span>
+                            )}
+                            <button
+                              onClick={e => startEditing(e, req)}
+                              title="Edit name"
+                              className="edit-name-btn"
+                              style={{
+                                background: "transparent", border: "none", padding: "1px 3px",
+                                cursor: "pointer", color: C.textDim, borderRadius: 4,
+                                display: "flex", alignItems: "center", flexShrink: 0, opacity: 0,
+                                transition: "opacity 0.1s, color 0.1s",
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.color = C.teal; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = C.textDim; }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div style={{ color: C.textDim, fontSize: 11 }}>
                         Started {new Date(req.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
@@ -4369,6 +4599,16 @@ export default function App() {
     if (req) saveRequest({ ...req, stage: "complete" });
     setView("tracker");
     setOpenRequest(null);
+  }
+
+  // Saves a child request created during the intake workstreams split step.
+  // Stays on the current request — the child appears in the Requests list.
+  function handleCreateChildRequest(childReq) {
+    saveRequest({
+      ...childReq,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   const navItems = [
@@ -4460,6 +4700,7 @@ export default function App() {
             initialRequest={openRequest}
             onUpdate={handleRequestUpdate}
             onComplete={handleRequestComplete}
+            onCreateChildRequest={handleCreateChildRequest}
           />
         )}
         {view === "pipeline" && <PipelinePage />}

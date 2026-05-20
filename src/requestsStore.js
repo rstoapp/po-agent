@@ -33,3 +33,22 @@ export function deleteRequest(id) {
 export function getRequest(id) {
   return getRequests().find(r => r.id === id) || null;
 }
+
+// Create a child request linked to a parent (used when a split is recommended during intake).
+// Fields: title, type, parentId, isEpic, stage — all stored in localStorage via saveRequest.
+export function createChildRequest(parentId, partial = {}) {
+  const now = new Date().toISOString();
+  const childId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const req = {
+    id: childId,
+    parentId,
+    isEpic: false,
+    stage: "intake",
+    title: partial.title || null,
+    ...partial,
+    createdAt: now,
+    updatedAt: now,
+  };
+  saveRequest(req);
+  return req;
+}
