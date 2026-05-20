@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { fetchTickets } from "./notionService.js";
 import { getRequests, saveRequest, deleteRequest } from "./requestsStore.js";
+import DataDiscovery from "./DataDiscovery.jsx";
 
 // ─── Design tokens — RSTO palette (Blue/Sky teal + Saltbush green) ────────────
 const C = {
@@ -4617,6 +4618,7 @@ export default function App() {
     { id: "request", label: "New request", icon: "+" },
     { id: "pipeline", label: "Pipeline guide", icon: "⊙" },
     { id: "audit", label: "Build audit", icon: "⊛" },
+    { id: "discovery", label: "Data discovery", icon: "⊕" },
   ];
 
   return (
@@ -4705,6 +4707,7 @@ export default function App() {
         )}
         {view === "pipeline" && <PipelinePage />}
         {view === "audit" && <RepoAuditView />}
+        {view === "discovery" && <DataDiscovery />}
       </div>
     </div>
   );
