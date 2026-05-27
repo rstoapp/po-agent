@@ -448,9 +448,11 @@ RSTO is a platform for Australian early childhood service providers across three
 Respond with ONLY a valid JSON object. No preamble, no markdown fences, no trailing text. The JSON must be complete and valid — never truncate it.
 
 If repo context is provided, use it to:
-- Populate fields that are already defined in the codebase (constants, formulas, table names)
+- Populate fields that are already defined in the codebase (constants, formulas, table names, seed patterns)
+- Identify the correct reference seed file (e.g. com-kwinana, not Goodstart Gladstone, if QN1/QL1 not using CSV pipeline)
 - Flag assumptions that contradict existing implementation
-- Surface split recommendations if the request spans multiple layers
+- Identify required frontend code changes (indicator library exclusions, routing, feature flags)
+- List the read-only source tables the indicators actually query (separate from seed tables)
 - Cite specific file paths for any referenced components
 
 Output this structure with concise values — keep strings short:
@@ -464,45 +466,48 @@ Output this structure with concise values — keep strings short:
   "acceptanceCriteria": [
     { "text": "testable binary statement", "confidence": "confirmed|assumed" }
   ],
-  "confidenceMap": [
-    { "field": "name", "value": "value or unknown", "confidence": "confirmed|inferred|assumed|unknown", "question": "question if unknown/assumed, else null" }
+  "serviceProviders": [
+    {
+      "name": "Full SP name",
+      "groupAlias": "proposed-alias (follow kebab-case naming from existing SPs, propose even if unconfirmed)",
+      "serviceApprovalNo": "SE-XXXXXXXX or null",
+      "strategy": "ECEC|ANC|PP",
+      "sa2Code": "SA2 code if derivable from repo context or request, else null",
+      "metropolitanArea": "true|false|null — drives QN1 aggregation level; confirm from existing SP patterns",
+      "notes": "e.g. already exists under com-kwinana"
+    }
+  ],
+  "indicatorsIncluded": ["QN1", "QL1"],
+  "indicatorsExcluded": [
+    { "indicator": "ecec_p1", "reason": "Participation — no attendance data for this SP type" }
+  ],
+  "referenceSeed": "src/migrations/data-seed-migrations/YYYYMMDD-seed-name.js or null if unknown",
+  "readOnlyTables": [
+    { "table": "f_ecec_au_centre", "usedBy": "QN1 + QL1", "provides": "ACECQA ratings, approved places, service type, service_approval_number" }
+  ],
+  "frontendCodeChanges": [
+    { "description": "Exclude participation for new SP aliases", "file": "src/stores/serviceProviderStore/indicatorLibrary.ts", "pattern": "Add groupAlias-based cases in getIndicators() — follow ngunga-derby pattern for PP" }
   ],
   "openDecisions": [
     { "question": "specific question", "blocksProgress": true, "owner": "RSTO|PALO|dev" }
   ],
+  "confirmedDecisions": [
+    { "decision": "what was decided", "choice": "the chosen option", "reason": "why" }
+  ],
   "subtasks": [
-    { "id": "T1|D1|F1", "title": "short title", "layer": "backend|design|frontend|data" }
+    { "id": "D1|B1|F1", "title": "short title", "layer": "backend|design|frontend|data" }
   ],
-  "meetingPrepQuestions": [
-    { "question": "question", "owner": "dev|RSTO", "critical": true }
-  ],
-  "dataSpecification": [
-    {
-      "fileName": "descriptive name for this file/export e.g. Apricot attendance export",
-      "source": "Apricot|Salesforce|spreadsheet|ABS|AEDC|manual",
-      "requiredColumns": [
-        { "name": "column name as expected by the platform", "description": "what this column must contain", "example": "example value or format", "status": "confirmed|assumed|unknown" }
-      ],
-      "format": "CSV|Excel|JSON|other",
-      "knownIssues": "any structural gotchas from the codebase or prior work — null if none",
-      "sampleAvailable": true
-    }
-  ],
-  "completenessScore": { "populated": 0, "total": 0, "blockers": 0 },
-  "sequencingNotes": "two sentences max"
+  "completenessScore": { "populated": 0, "total": 0, "blockers": 0 }
 }
 
 Confidence rules: confirmed=explicitly stated, inferred=logically derived, assumed=likely from RSTO patterns, unknown=genuinely missing.
-AC rules: testable binary statements. Max 6 ACs, 8 confidence fields, 4 decisions, 6 subtasks, 4 meeting questions. Be concise.
-
-dataSpecification rules:
-- Generate one entry per data file or export the platform will need to ingest for this request
-- For each file, derive requiredColumns from the repo context — look for indicator spec files, existing ingestion pipeline docs, SQL table definitions, and prior SP onboarding guides
-- If the repo context shows an existing indicator (e.g. QN1, P1) that this request relates to, populate the columns that indicator already expects
-- If the file structure is genuinely unknown (no prior work in the repo), still create the entry but mark all columns status as "unknown" and leave example null
-- Set sampleAvailable=false if the request or repo context indicates no sample file exists yet
-- knownIssues: capture any structural quirks documented in the repo (e.g. "Apricot exports attendance with one row per session rather than one row per participant", "completion rate requires minimum 3 sessions before calculating")
-- This section must NOT be empty for sp-onboarding or new-indicators requests — it is the primary output the dev team uses to validate data readiness before starting work`;
+AC rules: testable binary statements. Max 6 ACs.
+serviceProviders: always include ALL service providers from the request. Propose groupAlias even if not confirmed — it is faster for stakeholders to confirm/reject than to invent from scratch.
+indicatorsExcluded: always populate if any standard indicators (P1, QN1, QL1) are NOT in scope — state the reason clearly.
+referenceSeed: cite the correct existing seed file to follow, NOT a generic example. If QN1/QL1 use platform tables directly (no CSV upload), do NOT cite a seed that includes a transformer or document file.
+readOnlyTables: always list the source tables the in-scope indicators actually query. This is required for query dependency visibility — dev team uses this to confirm data is loaded before starting.
+frontendCodeChanges: if any indicator is marked isUniversal:true but should be excluded for these SPs, this MUST be documented. Omitting it causes the wrong indicators to appear on the dashboard.
+confirmedDecisions: separate from openDecisions — list things already agreed, not outstanding questions.`;
 
 const DELIVERY_SYSTEM = `You are the Delivery Agent for the RSTO delivery pipeline. You receive an approved requirement document and must generate final delivery outputs.
 
@@ -551,9 +556,12 @@ RSTO questions should be plain English — no jargon.`;
 // ─── Repo paths ───────────────────────────────────────────────────────────────
 const REPO_BASE = "/Users/daniellebennett/Desktop/6. Projects/RSTO/03 Product & Technology/03 Repositories";
 const CONTEXT_REPO = `${REPO_BASE}/rsto-context`;
+const DATA_REPO    = `${REPO_BASE}/rsto-data`;
+const APP_REPO     = `${REPO_BASE}/rsto-app`;
 
 // Files the context agent reads — mapped by request type + strategy
 const CONTEXT_FILE_MAP = {
+  // rsto-context docs
   indicators: {
     pp:   ["docs/06-indicators/pp/pp-indicator-overview.md", "docs/06-indicators/pp/quantity-qn1.md", "docs/06-indicators/pp/participation-p1.md", "docs/06-indicators/pp/quality-ql1.md"],
     ecec: ["docs/06-indicators/ecec"],
@@ -567,6 +575,15 @@ const CONTEXT_FILE_MAP = {
     anc:  ["docs/05-partners/service-providers/anc"],
   },
   architecture: ["docs/04-platform-architecture/system-overview.md"],
+  // rsto-data — seed migrations and indicator services
+  seedMigrations: [`${DATA_REPO}/src/migrations/data-seed-migrations`],
+  indicatorServices: {
+    pp:   [`${DATA_REPO}/src/indicator/pp`],
+    ecec: [`${DATA_REPO}/src/indicator/ecec`],
+    anc:  [`${DATA_REPO}/src/indicator/anc`],
+  },
+  // rsto-app — frontend indicator library (isUniversal flags, exclusion patterns)
+  indicatorLibrary: [`${APP_REPO}/src/stores/serviceProviderStore/indicatorLibrary.ts`],
 };
 
 // ─── Ticket data from Notion (real) ──────────────────────────────────────────
@@ -2172,7 +2189,7 @@ async function readRepoFiles(filePaths, strategy) {
         system: `You are a file reader. Read the files at the given paths using the filesystem tool. For each file that exists, return its content. For directories, list their contents and read the most relevant .md files (max 3 per directory). Return a JSON array: [{"path": "...", "content": "..."}]. Return ONLY valid JSON, no other text.`,
         messages: [{
           role: "user",
-          content: `Read these paths from the rsto-context repo and return their contents as JSON:\n${pathsToRead.join("\n")}\n\nFor directories, read the .md files inside. Focus on indicator specs, feature docs, and partner/SP documentation relevant to strategy: ${strategy || "general"}.`
+          content: `Read these paths and return their contents as JSON:\n${pathsToRead.join("\n")}\n\nFor directories, list and read the most relevant files inside (prioritise .md, .ts, .js files; max 5 per directory). Focus on indicator specs, seed migration files, feature docs, partner/SP documentation, and indicator library configurations relevant to strategy: ${strategy || "general"}.`
         }],
         mcp_servers: [{
           type: "url",
@@ -2236,6 +2253,11 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
           if (strategy) {
             filesToRead.push(...(CONTEXT_FILE_MAP.indicators[strategy] || []));
             filesToRead.push(...(CONTEXT_FILE_MAP.partners[strategy] || []));
+            filesToRead.push(...(CONTEXT_FILE_MAP.indicatorServices[strategy] || []));
+          }
+          if (isOnboarding || strategy) {
+            filesToRead.push(...CONTEXT_FILE_MAP.seedMigrations);
+            filesToRead.push(...CONTEXT_FILE_MAP.indicatorLibrary);
           }
           if (isOnboarding) filesToRead.push(...CONTEXT_FILE_MAP.onboarding);
           filesToRead.push(...CONTEXT_FILE_MAP.features);
@@ -2250,7 +2272,7 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
           isDesignTask
             ? "\n\nNote: This is a DESIGN TASK — no repository context is needed. The designer (PALO) will execute this in Figma. Do not generate a dataSpecification. Focus the output on deliverable scope, acceptance criteria, and open decisions about the design itself."
             : repoContext.length > 0
-              ? `\n\nThe following files from rsto-context are relevant to this request:\n\n${repoContext.map(f => `### ${f.path}\n${f.content}`).join("\n\n")}`
+              ? `\n\nThe following files from rsto-context, rsto-data, and rsto-app are relevant to this request:\n\n${repoContext.map(f => `### ${f.path}\n${f.content}`).join("\n\n")}`
               : "\n\nNote: No matching repo context files were found for this request type."
         ].join("");
 
@@ -2306,7 +2328,7 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {[
-          ...(!isDesignTaskView ? [{ stage: "reading", label: "Reading rsto-context repository", done: loadingStage === "analysing" }] : []),
+          ...(!isDesignTaskView ? [{ stage: "reading", label: "Reading rsto-context, rsto-data, rsto-app", done: loadingStage === "analysing" }] : []),
           { stage: "analysing", label: isDesignTaskView ? "Generating design task specification" : "Requirements agent analysing with repo context", done: false },
         ].map(({ stage, label, done }) => {
           const active = loadingStage === stage;
@@ -2379,6 +2401,11 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
                 <span style={{ color: C.red, fontSize: 12, fontWeight: 600 }}>⚠ {score.blockers} blocker{score.blockers !== 1 ? "s" : ""}</span>
               </div>
             )}
+            <button
+              title="Re-run the requirements agent with the latest prompt. Use this if the document has empty sections."
+              onClick={() => { setReqDoc(null); setError(null); setLoadingStage("reading"); setLoading(true); setRunCount(c => c + 1); }}
+              style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textMuted, fontSize: 11, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}
+            >↻ Regenerate</button>
           </div>
         </div>
 
@@ -2597,7 +2624,7 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
             {/* Files read */}
             <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, marginBottom: 14 }}>
               <div style={{ color: C.textDim, fontSize: 11, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 12 }}>
-                Files read from rsto-context
+                Files read from repositories
               </div>
               {(reqDoc._repoFilesRead || []).length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -2608,7 +2635,7 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
                         <path d="M4 5h6M4 7.5h4" stroke={C.docColor} strokeWidth="1" strokeLinecap="round"/>
                       </svg>
                       <span style={{ color: C.textMuted, fontSize: 11, fontFamily: "monospace" }}>
-                        {path.replace(CONTEXT_REPO + "/", "")}
+                        {path.replace(DATA_REPO + "/", "rsto-data/").replace(APP_REPO + "/", "rsto-app/").replace(CONTEXT_REPO + "/", "rsto-context/")}
                       </span>
                     </div>
                   ))}
@@ -2627,7 +2654,7 @@ function Gate2View({ gate1Summary, onGate2Approved, onReqDocGenerated, preloaded
                   What the repo context informed
                 </div>
                 <div style={{ color: C.navy, fontSize: 13, lineHeight: 1.7 }}>
-                  The requirements agent read {reqDoc._repoFilesRead.length} file{reqDoc._repoFilesRead.length !== 1 ? "s" : ""} from rsto-context.
+                  The requirements agent read {reqDoc._repoFilesRead.length} file{reqDoc._repoFilesRead.length !== 1 ? "s" : ""} from rsto-context, rsto-data, and rsto-app.
                   Any confirmed fields in the confidence map were populated directly from these documents.
                   Assumed or unknown fields indicate gaps not covered by existing documentation.
                 </div>
@@ -3189,7 +3216,8 @@ function RequestFlow({ onComplete, initialRequest, onUpdate, onCreateChildReques
     stage === "gate1-pending" ? 1 :
     stage === "gate2" && !reqDocReady ? 2 :
     stage === "gate2" && reqDocReady ? 3 :
-    stage === "delivery" ? 4 : 0;
+    stage === "delivery" ? 4 :
+    stage === "complete" ? 4 : 0;
 
   const completedUpTo =
     stage === "gate1-pending" ? 1 :
@@ -3376,6 +3404,14 @@ function RequestFlow({ onComplete, initialRequest, onUpdate, onCreateChildReques
             onDone={() => onComplete?.({ id: requestId.current, title: reqTitle, stage: "complete", gate1Summary, reqDoc: approvedReqDoc, deliveryOutput: savedDeliveryOutput, createdAt: initialRequest?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() })}
             preloadedOutput={savedDeliveryOutput}
             onOutputGenerated={handleDeliveryGenerated}
+          />
+        )}
+        {!viewStage && stage === "complete" && (
+          <Gate2View
+            gate1Summary={gate1Summary}
+            onGate2Approved={() => {}}
+            onReqDocGenerated={handleReqDocGenerated}
+            preloadedReqDoc={savedReqDoc || approvedReqDoc}
           />
         )}
         {/* Review mode — past step panels (read-only) */}
@@ -4094,137 +4130,130 @@ function RepoAuditView() {
 
 // ─── Markdown generator for saved requests ────────────────────────────────────
 function generateMarkdown(request) {
-  const { title, gate1Summary, reqDoc, deliveryOutput, createdAt } = request;
+  const { title, reqDoc, createdAt } = request;
   const lines = [];
-  lines.push(`# ${reqDoc?.title || title || "Requirement Document"}`);
-  lines.push(`\n_Generated: ${new Date(createdAt).toLocaleDateString("en-AU")}_\n`);
+  const today = new Date().toISOString().slice(0, 10);
 
-  if (gate1Summary) {
-    lines.push(`## Gate 1 Summary\n\n${gate1Summary}\n`);
-  }
-
-  if (reqDoc) {
-    lines.push(`## Description\n\n${reqDoc.description}\n`);
-    if (reqDoc.why) lines.push(`### Why\n\n${reqDoc.why}\n`);
-    lines.push(`## Priority\n\n${reqDoc.priority}\n`);
-
-    if (reqDoc.acceptanceCriteria?.length) {
-      lines.push(`## Acceptance Criteria\n`);
-      reqDoc.acceptanceCriteria.forEach(ac => {
-        lines.push(`- [ ] ${ac.text || ac} _(${ac.confidence || "assumed"})_`);
-      });
-      lines.push("");
-    }
-
-    if (reqDoc.openDecisions?.length) {
-      lines.push(`## Open Decisions\n`);
-      reqDoc.openDecisions.forEach(d => {
-        lines.push(`- **${d.owner}**${d.blocksProgress ? " 🚫 BLOCKS" : ""}: ${d.question}`);
-      });
-      lines.push("");
-    }
-
-    if (reqDoc.subtasks?.length) {
-      lines.push(`## Subtasks\n`);
-      reqDoc.subtasks.forEach(t => {
-        lines.push(`- [${t.id}] ${t.title} _(${t.layer})_`);
-      });
-      lines.push("");
-    }
-  }
-
-  if (deliveryOutput?.notionTicket) {
-    const nt = deliveryOutput.notionTicket;
-    lines.push(`## Notion Ticket\n`);
-    lines.push(`**Title:** ${nt.title}`);
-    lines.push(`**Status:** ${nt.status}`);
-    lines.push(`**Priority:** ${nt.priority}\n`);
-    lines.push(`${nt.description}\n`);
-    if (nt.acceptanceCriteria?.length) {
-      lines.push(`### Acceptance Criteria\n`);
-      nt.acceptanceCriteria.forEach(ac => lines.push(`- [ ] ${ac}`));
-      lines.push("");
-    }
-  }
-
-  if (deliveryOutput?.meetingPrepDoc) {
-    const mp = deliveryOutput.meetingPrepDoc;
-    lines.push(`## Meeting Prep\n`);
-    lines.push(`### What we're building\n\n${mp.whatWeAreBuilding}\n`);
-    if (mp.decisionsNeeded?.length) {
-      lines.push(`### Decisions needed\n`);
-      mp.decisionsNeeded.forEach(d => lines.push(`- [${d.owner}] ${d.question}`));
-      lines.push("");
-    }
-    if (mp.devQuestions?.length) {
-      lines.push(`### Dev questions\n`);
-      mp.devQuestions.forEach(q => lines.push(`- ${q}`));
-      lines.push("");
-    }
-    if (mp.suggestedAgenda?.length) {
-      lines.push(`### Agenda (30 min)\n`);
-      mp.suggestedAgenda.forEach(a => lines.push(`- ${a.minutes} min: ${a.item}`));
-      lines.push("");
-    }
-  }
-
-  if (deliveryOutput?.sequencingAdvice) {
-    const sa = deliveryOutput.sequencingAdvice;
-    lines.push(`## Sequencing\n`);
-    if (sa.suggestedSprint) lines.push(`**Sprint:** ${sa.suggestedSprint}\n`);
-    if (sa.dependencies?.length) {
-      lines.push(`### Dependencies\n`);
-      sa.dependencies.forEach(d => lines.push(`- ${d}`));
-      lines.push("");
-    }
-    if (sa.risks?.length) {
-      lines.push(`### Risks\n`);
-      sa.risks.forEach(r => lines.push(`- ${r}`));
-      lines.push("");
-    }
-  }
-
-  // ── Dev workflow sections ──────────────────────────────────────────────────
+  // ── Frontmatter ────────────────────────────────────────────────────────────
+  lines.push(`---`);
+  lines.push(`title: "${(reqDoc?.title || title || "Requirement Document").replace(/"/g, "'")}"`);
+  lines.push(`status: "draft"`);
+  lines.push(`lastUpdated: "${new Date(createdAt).toISOString().slice(0, 10)}"`);
+  lines.push(`submittedBy: ""`);
+  lines.push(`accountableOwner: ""`);
+  lines.push(`workstream: "${reqDoc?.workstream || ""}"`);
+  lines.push(`requestType: "${reqDoc?.requestType || ""}"`);
+  lines.push(`priority: "${reqDoc?.priority || ""}"`);
+  lines.push(`tags: []`);
   lines.push(`---\n`);
-  lines.push(`## Section: Scope\n`);
+
+  lines.push(`# ${reqDoc?.title || title || "Requirement Document"}\n`);
+  lines.push(`_Generated: ${new Date(createdAt).toLocaleDateString("en-AU")}_\n`);
+  lines.push(`---\n`);
+
+  // ── Section 1: Request Summary ─────────────────────────────────────────────
+  lines.push(`## Section 1: Request Summary\n`);
+  lines.push(`| Field | Details |`);
+  lines.push(`|-------|---------|`);
+  lines.push(`| **Request Title** | ${reqDoc?.title || title || ""} |`);
+  lines.push(`| **Date Submitted** | ${new Date(createdAt).toISOString().slice(0, 10)} |`);
+  lines.push(`| **Submitted By** |  |`);
+  lines.push(`| **Accountable Owner** |  |`);
+  lines.push(`| **Workstream** | ${reqDoc?.workstream || ""} |`);
+  lines.push(`| **Request Type** | ${reqDoc?.requestType || ""} |`);
+  lines.push(`| **Priority** | ${reqDoc?.priority || ""} |\n`);
+  lines.push(`---\n`);
+
+  // ── Section 2: Description ─────────────────────────────────────────────────
+  lines.push(`## Section 2: Description\n`);
+  if (reqDoc?.description) lines.push(`${reqDoc.description}\n`);
+  lines.push(`### Context\n`);
+  if (reqDoc?.why) lines.push(`${reqDoc.why}\n`);
+  if (reqDoc?.acceptanceCriteria?.length) {
+    lines.push(`### Acceptance Criteria\n`);
+    reqDoc.acceptanceCriteria.forEach(ac => {
+      lines.push(`- [ ] ${ac.text || ac}${ac.confidence ? ` _(${ac.confidence})_` : ""}`);
+    });
+    lines.push("");
+  }
+  lines.push(`---\n`);
+
+  // ── Section 3: Scope ───────────────────────────────────────────────────────
+  lines.push(`## Section 3: Scope\n`);
   lines.push(`### Strategy & Indicators\n`);
   lines.push(`| Strategy | Indicators | Frequency | Type |`);
   lines.push(`|----------|-----------|-----------|------|`);
-  lines.push(`| | | | |\n`);
-  lines.push(`### Service Providers Affected\n`);
-  lines.push(`| SP Name | Group Alias | Strategy | Notes |`);
-  lines.push(`|---------|-------------|----------|-------|`);
-  lines.push(`| | | | |\n`);
+  lines.push(`| | ${reqDoc?.indicatorsIncluded?.join(", ") || ""} | | |\n`);
 
-  lines.push(`## Section: Data Design\n`);
+  if (reqDoc?.indicatorsExcluded?.length) {
+    lines.push(`### Indicators Excluded\n`);
+    reqDoc.indicatorsExcluded.forEach(ie => {
+      lines.push(`- **${ie.indicator}** — ${ie.reason}`);
+    });
+    lines.push("");
+  }
+
+  lines.push(`### Service Providers Affected\n`);
+  lines.push(`| SP Name | Group Alias | Service Approval No. | Metropolitan Area | Strategy | Notes |`);
+  lines.push(`|---------|-------------|---------------------|-------------------|----------|-------|`);
+  if (reqDoc?.serviceProviders?.length) {
+    reqDoc.serviceProviders.forEach(sp => {
+      lines.push(`| ${sp.name || ""} | \`${sp.groupAlias || ""}\` | ${sp.serviceApprovalNo || ""} | ${sp.metropolitanArea ?? ""} | ${sp.strategy || ""} | ${sp.notes || ""} |`);
+    });
+  } else {
+    lines.push(`| | | | | | |`);
+  }
+  lines.push(`\n---\n`);
+
+  // ── Section 4: Data Design ─────────────────────────────────────────────────
+  lines.push(`## Section 4: Data Design\n`);
   lines.push(`### Database Tables Involved\n`);
+  lines.push(`**Seed / configuration tables** (require migration changes):\n`);
   lines.push(`| Table | Role | Key Fields |`);
   lines.push(`|-------|------|------------|`);
-  lines.push(`| \`f_service_provider\` | SP entity | \`id\`, \`group_alias\`, \`type\` |`);
+  lines.push(`| \`f_service_provider\` | SP entity | \`id\`, \`group_alias\`, \`type\`, \`metropolitan_area\` |`);
   lines.push(`| \`service_provider_strategy\` | SP ↔ strategy link | \`frequency\`, \`next_reporting_period_id\` |`);
-  lines.push(`| \`submission_record\` | Upload tracking | \`status\`, \`publish_status\`, \`reporting_period_id\` |`);
-  lines.push(`| \`reporting_period\` | Period definition | \`start_date\`, \`end_date\`, \`frequency\` |\n`);
+  lines.push(`| \`submission_record\` | Initial submission record per SP | \`status\`, \`publish_status\`, \`reporting_period_id\` |`);
+  lines.push(`| \`service_provider_coverage\` | SA2 coverage rows per SP | \`sa2_id\`, \`sa3_id\`, \`lga_pid\`, \`state\` |`);
+  lines.push(`| \`service_provider_indicator_detail\` | Indicator detail content | \`indicator_name\`, \`description\`, \`data_sources\` |`);
+  lines.push(`| \`f_ecec_p_centre\` | Links SP to its centre by service approval number | \`service_approval_number\`, \`service_provider_id\`, \`name\` |`);
+  lines.push(`| \`reporting_period\` | Starting period reference | \`start_date\`, \`end_date\`, \`frequency\` |\n`);
+
+  lines.push(`**Read-only source tables** (pre-populated, no migration needed — listed for query dependency visibility):\n`);
+  lines.push(`| Table | Used by | What it provides |`);
+  lines.push(`|-------|---------|-----------------|`);
+  if (reqDoc?.readOnlyTables?.length) {
+    reqDoc.readOnlyTables.forEach(t => {
+      lines.push(`| \`${t.table}\` | ${t.usedBy} | ${t.provides} |`);
+    });
+  } else {
+    lines.push(`| | | |`);
+  }
+  lines.push("");
 
   lines.push(`### Migration Requirements\n`);
   lines.push(`**Seed data needed?** Yes / No\n`);
-  lines.push(`- [ ] Service provider entity (\`f_service_provider\`)`);
+  lines.push(`**Reference seed:** ${reqDoc?.referenceSeed || "[path to reference seed file in rsto-data]"}\n`);
+  lines.push(`- [ ] Service provider entity (\`f_service_provider\`) — \`type: SERVICE_PROVIDER\``);
   lines.push(`- [ ] Strategy link (\`service_provider_strategy\`)`);
   lines.push(`- [ ] Submission record (\`submission_record\`)`);
-  lines.push(`- [ ] Document link (\`service_provider_document\`)`);
-  lines.push(`- [ ] Coverage area (\`service_provider_coverage\`)`);
-  lines.push(`- [ ] Indicator details (\`service_provider_indicator_detail\`)`);
-  lines.push(`- [ ] Strategy-specific tables (e.g., \`f_ecec_p_centre\`, \`f_anc_facility\`)`);
-  lines.push(`- [ ] Community join table (\`community_service_provider\`)\n`);
-  lines.push(`**Reporting period**: Which period should the initial submission point to?`);
-  lines.push(`- Period: [e.g., Q4 2025 (2025-10-01 to 2025-12-31)]`);
-  lines.push(`- Rationale: [e.g., mock data dates fall within this range]\n`);
+  lines.push(`- [ ] Coverage area (\`service_provider_coverage\`) — one row per SA2 per SP`);
+  lines.push(`- [ ] Indicator details (\`service_provider_indicator_detail\`) — include only indicators in scope`);
+  lines.push(`- [ ] \`f_ecec_p_centre\` — one row per SP linked by service approval number`);
+  lines.push(`- ~~[ ] Document link (\`service_provider_document\`)~~ — not required if indicators query platform tables directly`);
+  lines.push(`- ~~[ ] Community join table (\`community_service_provider\`)~~ — not required for SERVICE_PROVIDER type\n`);
+  lines.push(`**Reporting period:** Which period should the initial submission point to?`);
+  lines.push(`- Period: [e.g., 2026-05-01 MONTHLY]`);
+  lines.push(`- SQL reference: \`SELECT id FROM reporting_period WHERE frequency = 'MONTHLY' AND start_date = '2026-05-01' LIMIT 1\`\n`);
 
   lines.push(`### Mock Data\n`);
   lines.push(`| File | Date field | Date range | Notes |`);
   lines.push(`|------|-----------|------------|-------|`);
   lines.push(`| | | | |\n`);
+  lines.push(`---\n`);
 
-  lines.push(`## Section: Backend Implementation\n`);
+  // ── Section 5: Backend Implementation ──────────────────────────────────────
+  lines.push(`## Section 5: Backend Implementation\n`);
   lines.push(`### API Endpoints\n`);
   lines.push(`| Method | Path | Purpose |`);
   lines.push(`|--------|------|---------|`);
@@ -4237,19 +4266,21 @@ function generateMarkdown(request) {
   lines.push(`| | \`src/indicator/[strategy]/[indicator]/\` | |\n`);
 
   lines.push(`### Query Logic\n`);
-  lines.push(`**Insight query filters**:`);
+  lines.push(`**Insight query filters:**`);
   lines.push(`- \`[date_field] >= reporting_period.start_date\``);
   lines.push(`- \`[date_field] <= reporting_period.end_date\``);
   lines.push(`- \`submission_id IN (submission records with status = 'SUCCESS')\`\n`);
-  lines.push(`**Chart query filters**:`);
-  lines.push(`- Same as insight but looks back 1 year from reporting period start\n`);
+  lines.push(`**Chart query filters:**`);
+  lines.push(`- Same as insight but looks back 12 months from reporting period start\n`);
 
   lines.push(`### Transformer\n`);
   lines.push(`| Transformer | Location | Document Type |`);
   lines.push(`|-------------|----------|---------------|`);
   lines.push(`| | \`src/transformation/spData/[strategy]/\` | |\n`);
+  lines.push(`---\n`);
 
-  lines.push(`## Section: Frontend Implementation\n`);
+  // ── Section 6: Frontend Implementation ────────────────────────────────────
+  lines.push(`## Section 6: Frontend Implementation\n`);
   lines.push(`### Existing Components to Reuse\n`);
   lines.push(`Check these locations before creating anything new:`);
   lines.push(`- \`src/components/atoms/\` — Base UI components`);
@@ -4269,7 +4300,24 @@ function generateMarkdown(request) {
   lines.push(`| Insight Hook | \`src/hooks/apiHooks/indicators/[strategy]/[name]/use[Name]InsightsData/\` | SWR-based |`);
   lines.push(`| Hydrator | \`src/hooks/apiHooks/indicators/[strategy]/[name]/use[Name]StoreHydrator/\` | Connects hooks to store |\n`);
 
-  lines.push(`## Section: UI Components\n`);
+  lines.push(`### ⚠️ Frontend Code Changes Required\n`);
+  if (reqDoc?.frontendCodeChanges?.length) {
+    reqDoc.frontendCodeChanges.forEach(fc => {
+      lines.push(`**${fc.description}**`);
+      if (fc.file) lines.push(`- File: \`${fc.file}\``);
+      if (fc.pattern) lines.push(`- Pattern: ${fc.pattern}`);
+      lines.push("");
+    });
+  } else {
+    lines.push(`> Document any indicator library changes, routing updates, or feature flag changes needed.\n`);
+    lines.push(`| Change | File | Pattern |`);
+    lines.push(`|--------|------|---------|`);
+    lines.push(`| | | |\n`);
+  }
+  lines.push(`---\n`);
+
+  // ── Section 7: UI Components ───────────────────────────────────────────────
+  lines.push(`## Section 7: UI Components\n`);
   lines.push(`### Insight Cards\n`);
   lines.push(`| Card | Metric | Description Text |`);
   lines.push(`|------|--------|-----------------|`);
@@ -4278,38 +4326,74 @@ function generateMarkdown(request) {
   lines.push(`| Chart | Type | X-Axis | Y-Axis | Filters |`);
   lines.push(`|-------|------|--------|--------|---------|`);
   lines.push(`| | | | | |\n`);
+  lines.push(`---\n`);
 
-  lines.push(`## Section: Implementation Checklist\n`);
-  lines.push(`### Backend (rsto-data)`);
-  lines.push(`- [ ] Create migration seed file (\`src/migrations/data-seed-migrations/\`)`);
-  lines.push(`- [ ] Verify transformer handles new SP (\`src/transformation/spData/transformerFactory.ts\`)`);
+  // ── Section 8: Implementation Checklist ────────────────────────────────────
+  lines.push(`## Section 8: Implementation Checklist\n`);
+  lines.push(`### Backend (rsto-data)\n`);
+  lines.push(`- [ ] Write migration seed file (\`src/migrations/data-seed-migrations/\`) using reference seed as base`);
+  lines.push(`- [ ] Confirm \`f_ecec_p_centre\` rows for each SP (service approval number required)`);
+  lines.push(`- [ ] Confirm SA2 codes for \`service_provider_coverage\``);
+  lines.push(`- [ ] Set \`metropolitan_area\` flag correctly on \`f_service_provider\``);
+  lines.push(`- [ ] Verify transformer handles new SP (\`src/transformation/spData/transformerFactory.ts\`) — or confirm no transformer is needed`);
   lines.push(`- [ ] Verify indicator service works for new SP`);
-  lines.push(`- [ ] Test upload → transform → query flow locally\n`);
-  lines.push(`### Frontend (rsto-app)`);
-  lines.push(`- [ ] Verify existing indicator components render for new SP`);
-  lines.push(`- [ ] Check routing / navigation includes new SP`);
-  lines.push(`- [ ] Test insight cards show correct data`);
-  lines.push(`- [ ] Test charts render with correct date ranges`);
-  lines.push(`- [ ] Test empty states / loading states\n`);
-  lines.push(`### Data Validation`);
-  lines.push(`- [ ] Mock CSV dates align with reporting period`);
-  lines.push(`- [ ] Upload via UI succeeds (status → SUCCESS)`);
-  lines.push(`- [ ] Insight cards show non-zero values`);
-  lines.push(`- [ ] Chart shows data across expected time range`);
-  lines.push(`- [ ] Publish flow creates next reporting period correctly\n`);
+  lines.push(`- [ ] Set up admin and view user profiles via dashboard user management\n`);
+  lines.push(`### Frontend (rsto-app)\n`);
+  lines.push(`- [ ] Apply required \`indicatorLibrary.ts\` changes (exclusions for this SP's aliases)`);
+  lines.push(`- [ ] Verify routing / navigation includes new SP`);
+  lines.push(`- [ ] Verify existing indicator components render correctly for new SP`);
+  lines.push(`- [ ] Test insight cards show correct non-zero values`);
+  lines.push(`- [ ] Test charts render with correct 12-month lookback range`);
+  lines.push(`- [ ] Test empty states and loading states\n`);
+  lines.push(`### Data Validation\n`);
+  lines.push(`- [ ] Insight cards show non-zero values for each SP's coverage area`);
+  lines.push(`- [ ] Charts show data filtered to the correct service approval number`);
+  lines.push(`- [ ] Charts display data across the expected date range`);
+  lines.push(`- [ ] Publish flow creates the next reporting period correctly\n`);
+  lines.push(`---\n`);
 
-  lines.push(`## Decisions\n`);
+  // ── Section 9: Decisions ───────────────────────────────────────────────────
+  lines.push(`## Section 9: Decisions\n`);
   lines.push(`| # | Decision | Choice | Reason |`);
   lines.push(`|---|----------|--------|--------|`);
-  lines.push(`| 1 | | | |\n`);
+  if (reqDoc?.confirmedDecisions?.length) {
+    reqDoc.confirmedDecisions.forEach((d, i) => {
+      lines.push(`| ${i + 1} | ${d.decision || ""} | ${d.choice || ""} | ${d.reason || ""} |`);
+    });
+  } else {
+    lines.push(`| 1 | | | |`);
+  }
+  lines.push(`\n---\n`);
 
+  // ── Section 10: Status ─────────────────────────────────────────────────────
+  lines.push(`## Section 10: Status\n`);
+  lines.push(`### Phase 1: Seed & Configuration (⏳ Not Started)\n`);
+  lines.push(`- [ ] Confirm group aliases for all SPs`);
+  lines.push(`- [ ] Confirm SA2 coverage codes`);
+  lines.push(`- [ ] Confirm \`metropolitan_area\` flag`);
+  lines.push(`- [ ] Confirm starting reporting period`);
+  lines.push(`- [ ] Write and run seed migrations\n`);
+  lines.push(`### Phase 2: Frontend (⏳ Not Started)\n`);
+  lines.push(`- [ ] Apply indicator library changes`);
+  lines.push(`- [ ] Verify dashboards render correctly end-to-end\n`);
+  lines.push(`---\n`);
+
+  // ── Remaining Questions ────────────────────────────────────────────────────
   lines.push(`## Remaining Questions\n`);
-  lines.push(`- [ ] \n`);
+  if (reqDoc?.openDecisions?.length) {
+    reqDoc.openDecisions.forEach(d => {
+      lines.push(`- ${d.blocksProgress ? "⛔ BLOCKS — " : ""}[${d.owner}] ${d.question}`);
+    });
+  } else {
+    lines.push(`- [ ] `);
+  }
+  lines.push("");
 
+  // ── Change History ─────────────────────────────────────────────────────────
   lines.push(`## Change History\n`);
   lines.push(`| Date | Change | Description |`);
   lines.push(`|------|--------|-------------|`);
-  lines.push(`| ${new Date().toISOString().slice(0, 10)} | Initial draft | Generated by PO agent |`);
+  lines.push(`| ${today} | Initial draft | Generated by PO agent |`);
 
   return lines.join("\n");
 }
@@ -4336,6 +4420,16 @@ async function saveDocToRepo(content, filename) {
   } catch (e) {
     return e.message;
   }
+}
+
+function buildRequirementFilename(req) {
+  const date = new Date(req?.createdAt || Date.now()).toISOString().slice(0, 10);
+  const base = (req?.title || req?.reqDoc?.title || req?.id || "requirement")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `${date}-${base || "requirement"}.md`;
 }
 
 // ─── Requests list + detail ────────────────────────────────────────────────────
@@ -4385,8 +4479,7 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
   }
 
   async function handleSaveToRepo(req) {
-    const slug = (req.title || req.id).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-    const filename = `${slug}-${req.id.slice(-6)}.md`;
+    const filename = buildRequirementFilename(req);
     setSaveStatus(s => ({ ...s, [req.id]: "saving" }));
     const err = await saveDocToRepo(generateMarkdown(req), filename);
     setSaveStatus(s => ({ ...s, [req.id]: err ? "error" : "saved" }));
@@ -4394,8 +4487,7 @@ function RequestsList({ onOpenRequest, onNewRequest }) {
   }
 
   function handleDownload(req) {
-    const slug = (req.title || req.id).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-    downloadMarkdown(generateMarkdown(req), `${slug}.md`);
+    downloadMarkdown(generateMarkdown(req), buildRequirementFilename(req));
   }
 
   const displayed = requests;
